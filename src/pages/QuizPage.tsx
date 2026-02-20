@@ -1,54 +1,51 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { getCharsByGrade, saveQuizOutcome } from '../services/progress';
-import { seedBaseData, ensureGradeProgress } from '../services/seed';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { trackEvent } from '../services/analytics';
+import { getCharsByGrade, saveQuizOutcome } from '../services/progress';
 import { generateQuestions } from '../services/quiz';
+import { ensureGradeProgress, seedBaseData } from '../services/seed';
 import { useAppStore } from '../store/useAppStore';
 import type { QuizAnswer, QuizMode, QuizQuestion, QuizResult } from '../types';
-
-interface QuizConfig {
-  mode: QuizMode;
-  questionCount: number;
-  timed: boolean;
-  timeLimitSec: number;
-}
 
 interface RetryLocationState {
   retryQuestions?: QuizQuestion[];
 }
 
-function formatTime(seconds: number): string {
-  const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
-  const ss = String(seconds % 60).padStart(2, '0');
-  return `${mm}:${ss}`;
-}
+type QuizFeedback = 'idle' | 'correct' | 'retry';
+
+const QUIZ_MODE: QuizMode = 'meaning';
+const GRADE_OPTIONS = [8, 7, 6] as const;
+const QUESTION_OPTIONS = [10, 20] as const;
 
 export function QuizPage() {
   const grade = useAppStore((state) => state.selectedGrade);
+  const setSelectedGrade = useAppStore((state) => state.setSelectedGrade);
   const navigate = useNavigate();
   const location = useLocation();
 
   const retryState = location.state as RetryLocationState | null;
 
-  const [config, setConfig] = useState<QuizConfig>({
-    mode: 'mixed',
-    questionCount: 20,
-    timed: false,
-    timeLimitSec: 600
-  });
+  const [configuredGrade, setConfiguredGrade] = useState<number>(grade ?? 8);
+  const [questionCount, setQuestionCount] = useState<number>(10);
 
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [startedAt, setStartedAt] = useState<Date | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [answerMap, setAnswerMap] = useState<Record<string, string>>({});
-  const [remainingSec, setRemainingSec] = useState(config.timeLimitSec);
+  const [feedback, setFeedback] = useState<QuizFeedback>('idle');
   const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const current = questions[currentIndex] ?? null;
   const isLastQuestion = currentIndex === questions.length - 1;
+
+  useEffect(() => {
+    if (grade) {
+      setConfiguredGrade(grade);
+    }
+  }, [grade]);
 
   useEffect(() => {
     const retryQuestions = retryState?.retryQuestions;
@@ -60,16 +57,19 @@ export function QuizPage() {
     setStartedAt(new Date());
     setCurrentIndex(0);
     setSelectedOption(null);
+    setFeedback('idle');
     setAnswerMap({});
+    setQuestionCount(retryQuestions.length);
+    setErrorMessage(null);
     setRunning(true);
-    setConfig((prev) => ({ ...prev, timed: false, questionCount: retryQuestions.length }));
 
     trackEvent('quiz_retry_started', { count: retryQuestions.length });
   }, [retryState, running]);
 
   const finishQuiz = useCallback(
     async (finalAnswers: Record<string, string>) => {
-      if (!grade || !startedAt || questions.length === 0) {
+      const targetGrade = grade ?? configuredGrade;
+      if (!targetGrade || !startedAt || questions.length === 0) {
         return;
       }
 
@@ -86,8 +86,8 @@ export function QuizPage() {
       });
 
       await saveQuizOutcome({
-        grade,
-        mode: config.mode,
+        grade: targetGrade,
+        mode: QUIZ_MODE,
         startedAt,
         endedAt,
         answers
@@ -99,7 +99,7 @@ export function QuizPage() {
       const score = total === 0 ? 0 : Math.round((correctCount / total) * 100);
 
       const result: QuizResult = {
-        mode: config.mode,
+        mode: QUIZ_MODE,
         score,
         total,
         correctCount,
@@ -110,38 +110,19 @@ export function QuizPage() {
       };
 
       trackEvent('quiz_completed', {
-        grade,
+        grade: targetGrade,
         score,
         total,
         wrongCount: result.wrongCount,
-        mode: config.mode
+        mode: QUIZ_MODE
       });
 
       setSubmitting(false);
       setRunning(false);
-      navigate('/result', { state: { result } });
+      void navigate('/result', { state: { result } });
     },
-    [config.mode, grade, navigate, questions, startedAt]
+    [configuredGrade, grade, navigate, questions, startedAt]
   );
-
-  useEffect(() => {
-    if (!running || !config.timed) {
-      return;
-    }
-
-    if (remainingSec <= 0) {
-      void finishQuiz(answerMap);
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      setRemainingSec((prev) => prev - 1);
-    }, 1000);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [answerMap, config.timed, finishQuiz, remainingSec, running]);
 
   const progressText = useMemo(() => {
     if (!running || questions.length === 0) {
@@ -152,30 +133,54 @@ export function QuizPage() {
   }, [currentIndex, questions.length, running]);
 
   async function startQuiz(): Promise<void> {
-    if (!grade) {
+    if (configuredGrade !== 8) {
       return;
     }
 
-    await seedBaseData();
-    await ensureGradeProgress(grade);
+    const targetGrade = configuredGrade;
+    setSelectedGrade(targetGrade);
 
-    const chars = await getCharsByGrade(grade);
-    const generated = generateQuestions(chars, config.questionCount, config.mode);
+    setErrorMessage(null);
+    await seedBaseData();
+    await ensureGradeProgress(targetGrade);
+
+    const chars = await getCharsByGrade(targetGrade);
+    if (chars.length === 0) {
+      setRunning(false);
+      setErrorMessage('해당 급수의 한자 데이터가 없어 퀴즈를 시작할 수 없습니다.');
+      return;
+    }
+
+    const generated = generateQuestions(chars, questionCount, QUIZ_MODE);
+    if (generated.length === 0) {
+      setRunning(false);
+      setErrorMessage('출제할 문제가 없습니다. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
 
     setQuestions(generated);
     setStartedAt(new Date());
     setCurrentIndex(0);
     setSelectedOption(null);
+    setFeedback('idle');
     setAnswerMap({});
-    setRemainingSec(config.timeLimitSec);
     setRunning(true);
 
     trackEvent('quiz_started', {
-      grade,
-      mode: config.mode,
+      grade: targetGrade,
+      mode: QUIZ_MODE,
       count: generated.length,
-      timed: config.timed
+      timed: false
     });
+  }
+
+  function handleOptionSelect(option: string): void {
+    if (submitting || !current) {
+      return;
+    }
+
+    setSelectedOption(option);
+    setFeedback(option === current.correctAnswer ? 'correct' : 'retry');
   }
 
   function handleNext(): void {
@@ -190,6 +195,7 @@ export function QuizPage() {
 
     setAnswerMap(updated);
     setSelectedOption(null);
+    setFeedback('idle');
 
     if (isLastQuestion) {
       void finishQuiz(updated);
@@ -199,89 +205,125 @@ export function QuizPage() {
     setCurrentIndex((prev) => prev + 1);
   }
 
-  if (!grade) {
-    return (
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-slate-700">대시보드에서 먼저 급수를 선택해주세요.</p>
-        <Link to="/" className="mt-3 inline-block rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white">
-          대시보드로 이동
-        </Link>
-      </section>
-    );
+  function optionClass(option: string): string {
+    const baseClass =
+      'w-full rounded-[20px] border px-5 py-4 text-left text-lg transition focus:outline-none focus:ring-2 focus:ring-calm-100';
+
+    if (!selectedOption) {
+      return `${baseClass} border-slate-200 bg-white text-ink hover:bg-slate-50`;
+    }
+
+    if (feedback === 'correct') {
+      if (option === selectedOption) {
+        return `${baseClass} border-emerald-200 bg-emerald-50 text-emerald-800`;
+      }
+      return `${baseClass} border-slate-200 bg-white text-slate-500`;
+    }
+
+    if (option === current?.correctAnswer) {
+      return `${baseClass} border-emerald-200 bg-emerald-50 text-emerald-800`;
+    }
+
+    if (option === selectedOption) {
+      return `${baseClass} border-coral-500 bg-coral-100 text-coral-500`;
+    }
+
+    return `${baseClass} border-slate-200 bg-white text-slate-500`;
   }
 
   if (!running) {
     return (
-      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">시험 모드 설정</h1>
+      <section className="space-y-4">
+        <header className="space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">뜻 고르기 퀴즈</h1>
+          <p className="text-sm text-slate-600">부담 없이 한 문제씩 집중해요.</p>
+        </header>
 
-        <label className="block space-y-1">
-          <span className="text-sm font-semibold text-slate-700">문제 유형</span>
-          <select
-            value={config.mode}
-            onChange={(event) => {
-              setConfig((prev) => ({ ...prev, mode: event.target.value as QuizMode }));
+        <article className="surface-card p-6 sm:p-7">
+          {errorMessage && <p className="rounded-[16px] bg-coral-100 px-4 py-3 text-sm text-coral-500">{errorMessage}</p>}
+
+          <div className="mt-2 space-y-4">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">급수</p>
+              <div className="segment-control">
+                {GRADE_OPTIONS.map((option) => {
+                  const isAvailable = option === 8;
+                  const isActive = configuredGrade === option;
+                  const className = [
+                    'segment-btn',
+                    isActive ? 'segment-btn-active' : '',
+                    !isAvailable ? 'segment-btn-disabled' : ''
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
+
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      disabled={!isAvailable}
+                      onClick={() => {
+                        setConfiguredGrade(option);
+                      }}
+                      className={className}
+                    >
+                      {option}급
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">문제 수</p>
+              <div className="segment-control">
+                {QUESTION_OPTIONS.map((option) => {
+                  const className = option === questionCount ? 'segment-btn segment-btn-active' : 'segment-btn';
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => {
+                        setQuestionCount(option);
+                      }}
+                      className={className}
+                    >
+                      {option}문제
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              void startQuiz();
             }}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+            className="btn-primary mt-6 px-5 py-3"
           >
-            <option value="mixed">혼합</option>
-            <option value="meaning">뜻 맞추기</option>
-            <option value="reading">음 맞추기</option>
-            <option value="character">한자 선택</option>
-          </select>
-        </label>
+            퀴즈 시작
+          </button>
+        </article>
+      </section>
+    );
+  }
 
-        <label className="block space-y-1">
-          <span className="text-sm font-semibold text-slate-700">문제 수</span>
-          <select
-            value={config.questionCount}
-            onChange={(event) => {
-              setConfig((prev) => ({ ...prev, questionCount: Number(event.target.value) }));
-            }}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-          >
-            <option value={10}>10문제</option>
-            <option value={20}>20문제</option>
-            <option value={50}>50문제</option>
-          </select>
-        </label>
-
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={config.timed}
-            onChange={(event) => {
-              setConfig((prev) => ({ ...prev, timed: event.target.checked }));
-            }}
-            className="h-4 w-4"
-          />
-          <span className="text-sm font-semibold text-slate-700">시간 제한 사용</span>
-        </label>
-
-        {config.timed && (
-          <label className="block space-y-1">
-            <span className="text-sm font-semibold text-slate-700">제한 시간(초)</span>
-            <input
-              type="number"
-              min={60}
-              step={30}
-              value={config.timeLimitSec}
-              onChange={(event) => {
-                setConfig((prev) => ({ ...prev, timeLimitSec: Number(event.target.value) || 600 }));
-              }}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
-            />
-          </label>
-        )}
-
+  if (!current) {
+    return (
+      <section className="surface-card space-y-4 p-7">
+        <h1 className="text-xl font-semibold tracking-tight text-ink">문제를 불러오지 못했습니다.</h1>
+        <p className="text-sm text-slate-600">퀴즈 화면을 닫고 다시 시작해 주세요.</p>
         <button
           type="button"
           onClick={() => {
-            void startQuiz();
+            setRunning(false);
+            setErrorMessage('문제를 준비하지 못했습니다. 다시 시도해 주세요.');
           }}
-          className="rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white hover:bg-brand-700"
+          className="btn-primary px-4 py-2"
         >
-          시험 시작
+          설정으로 돌아가기
         </button>
       </section>
     );
@@ -290,47 +332,45 @@ export function QuizPage() {
   return (
     <section className="space-y-4">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">실전 시험</h1>
-        <div className="text-right text-sm text-slate-600">
-          <p>{progressText}</p>
-          {config.timed && <p className="font-semibold text-amber-700">남은 시간 {formatTime(remainingSec)}</p>}
-        </div>
+        <h1 className="text-lg font-semibold tracking-tight text-ink">뜻 고르기</h1>
+        <p className="text-sm text-slate-500">{progressText}</p>
       </header>
 
-      {current && (
-        <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-brand-700">{current.type.toUpperCase()}</p>
-          <h2 className="mt-2 text-xl font-semibold">{current.prompt}</h2>
+      <article className="surface-card p-6 sm:p-7">
+        <p className="text-sm font-medium text-slate-500">문제</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">{current.prompt}</h2>
 
-          <div className="mt-5 grid gap-2">
-            {current.options.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => {
-                  setSelectedOption(option);
-                }}
-                className={`rounded-lg border px-4 py-2 text-left ${
-                  selectedOption === option
-                    ? 'border-brand-500 bg-brand-50 text-brand-800'
-                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
+        <div className="mt-5 grid gap-3">
+          {current.options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => {
+                handleOptionSelect(option);
+              }}
+              className={optionClass(option)}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
 
-          <button
-            type="button"
-            disabled={!selectedOption || submitting}
-            onClick={handleNext}
-            className="mt-5 rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isLastQuestion ? '제출하기' : '다음 문제'}
-          </button>
-        </article>
-      )}
+        {selectedOption && feedback === 'correct' && (
+          <p className="mt-4 text-sm font-medium text-emerald-700">좋아요. 정확해요.</p>
+        )}
+        {selectedOption && feedback === 'retry' && (
+          <p className="mt-4 text-sm font-medium text-coral-500">한번 더 볼까요?</p>
+        )}
+
+        <button
+          type="button"
+          disabled={!selectedOption || submitting}
+          onClick={handleNext}
+          className="btn-primary mt-5 px-5 py-3 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isLastQuestion ? '제출하기' : '다음 문제'}
+        </button>
+      </article>
     </section>
   );
 }

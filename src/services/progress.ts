@@ -5,10 +5,17 @@ import type {
   ProgressItem,
   QuizAnswer,
   QuizMode,
+  ReviewListItem,
   SessionRecord,
   StudyCardItem
 } from '../types';
-import { buildDailyQueue, markKnown, markRetry, toISODate } from './srs';
+import { buildDailyQueue, fromISODate, markKnown, markRetry, toISODate } from './srs';
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+function toStartOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
 
 export async function getCharsByGrade(grade: number): Promise<HanjaChar[]> {
   return db.chars.where('grade').equals(grade).toArray();
@@ -66,6 +73,39 @@ export async function applyStudyAction(
   await db.progress.put(updated);
 
   return updated;
+}
+
+export async function getUpcomingReviews(grade: number, limit = 3): Promise<ReviewListItem[]> {
+  const rows = await db.progress.where('grade').equals(grade).toArray();
+  const today = toStartOfDay(new Date());
+
+  return rows
+    .filter((item) => item.state !== 'MASTERED')
+    .sort((a, b) => {
+      if (a.dueDate !== b.dueDate) {
+        return a.dueDate.localeCompare(b.dueDate);
+      }
+      return b.wrongCount - a.wrongCount;
+    })
+    .slice(0, limit)
+    .map((item) => {
+      const due = toStartOfDay(fromISODate(item.dueDate));
+      const daysUntil = Math.round((due.getTime() - today.getTime()) / ONE_DAY_MS);
+      return {
+        char: item.char,
+        dueDate: item.dueDate,
+        daysUntil
+      };
+    });
+}
+
+export async function lookupChar(query: string): Promise<HanjaChar | null> {
+  const target = Array.from(query.trim())[0] ?? '';
+  if (!target) {
+    return null;
+  }
+  const found = await db.chars.get(target);
+  return found ?? null;
 }
 
 export async function saveQuizOutcome(params: {

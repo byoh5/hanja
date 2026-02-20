@@ -1,22 +1,28 @@
 import { db } from '../db';
 import { GRADE8_CHARS } from '../data/grade8';
 import { toISODate } from './srs';
-import type { ProgressItem } from '../types';
+import type { HanjaChar, ProgressItem } from '../types';
 
 const SEED_VERSION = '1';
 
+async function syncGradeChars(grade: number, chars: HanjaChar[]): Promise<void> {
+  const sourceSet = new Set(chars.map((item) => item.char));
+  const existing = await db.chars.where('grade').equals(grade).toArray();
+  const staleChars = existing
+    .filter((item) => !sourceSet.has(item.char))
+    .map((item) => item.char);
+
+  if (staleChars.length > 0) {
+    await db.chars.bulkDelete(staleChars);
+    await db.progress.bulkDelete(staleChars.map((char) => [char, grade] as [string, number]));
+  }
+
+  await db.chars.bulkPut(chars);
+}
+
 export async function seedBaseData(): Promise<void> {
   const storageKey = `hanja-step-seed-${SEED_VERSION}`;
-  const done = localStorage.getItem(storageKey);
-
-  if (done === 'done') {
-    return;
-  }
-
-  const count = await db.chars.count();
-  if (count === 0) {
-    await db.chars.bulkAdd(GRADE8_CHARS);
-  }
+  await syncGradeChars(8, GRADE8_CHARS);
 
   localStorage.setItem(storageKey, 'done');
 }
@@ -48,6 +54,6 @@ export async function ensureGradeProgress(grade: number): Promise<void> {
   }
 
   if (missing.length > 0) {
-    await db.progress.bulkAdd(missing);
+    await db.progress.bulkPut(missing);
   }
 }

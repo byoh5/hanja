@@ -71,3 +71,9 @@ export interface DashboardStats {
   reviewDue: number;
   newCount: number;
 }
+
+export interface ReviewListItem {
+  char: string;
+  dueDate: string;
+  daysUntil: number;
+}
