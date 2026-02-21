@@ -242,47 +242,51 @@ export function QuizPage() {
           <div className="mt-2 space-y-4">
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">급수</p>
-              <div className="segment-control">
-                {GRADE_OPTIONS.map((option) => {
-                  const isActive = configuredGrade === option;
-                  const className = ['segment-btn', isActive ? 'segment-btn-active' : '']
-                    .filter(Boolean)
-                    .join(' ');
+              <div className="overflow-x-auto pb-1">
+                <div className="segment-control min-w-max">
+                  {GRADE_OPTIONS.map((option) => {
+                    const isActive = configuredGrade === option;
+                    const className = ['segment-btn', isActive ? 'segment-btn-active' : '']
+                      .filter(Boolean)
+                      .join(' ');
 
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        setConfiguredGrade(option);
-                      }}
-                      className={className}
-                    >
-                      {option}급
-                    </button>
-                  );
-                })}
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => {
+                          setConfiguredGrade(option);
+                        }}
+                        className={className}
+                      >
+                        {option}급
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">문제 수</p>
-              <div className="segment-control">
-                {QUESTION_OPTIONS.map((option) => {
-                  const className = option === questionCount ? 'segment-btn segment-btn-active' : 'segment-btn';
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        setQuestionCount(option);
-                      }}
-                      className={className}
-                    >
-                      {option}문제
-                    </button>
-                  );
-                })}
+              <div className="overflow-x-auto pb-1">
+                <div className="segment-control min-w-max">
+                  {QUESTION_OPTIONS.map((option) => {
+                    const className = option === questionCount ? 'segment-btn segment-btn-active' : 'segment-btn';
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => {
+                          setQuestionCount(option);
+                        }}
+                        className={className}
+                      >
+                        {option}문제
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>

@@ -21,7 +21,7 @@ export function Layout() {
 
       <div className="mx-auto flex min-h-screen w-full max-w-4xl flex-col px-4 pb-10 pt-6 sm:px-6">
         <header className="mb-6 flex items-end justify-between">
-          <Link to="/" className="text-2xl font-semibold tracking-tight text-ink">
+          <Link to="/" className="inline-flex min-h-10 items-center py-1 text-2xl font-semibold tracking-tight text-ink">
             HanjaStep
           </Link>
           <button type="button" onClick={toggleSpeechEnabled} className="btn-muted px-3 py-1.5 text-xs">

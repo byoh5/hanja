@@ -154,24 +154,26 @@ export function CharListPage() {
       <article className="surface-card space-y-5 p-5 sm:p-6">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">급수</p>
-          <div className="segment-control overflow-x-auto">
-            {SUPPORTED_GRADES.map((option) => {
-              const isActive = option === grade;
-              const className = ['segment-btn', isActive ? 'segment-btn-active' : ''].filter(Boolean).join(' ');
+          <div className="overflow-x-auto pb-1">
+            <div className="segment-control min-w-max">
+              {SUPPORTED_GRADES.map((option) => {
+                const isActive = option === grade;
+                const className = ['segment-btn', isActive ? 'segment-btn-active' : ''].filter(Boolean).join(' ');
 
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => {
-                    setSelectedGrade(option);
-                  }}
-                  className={className}
-                >
-                  {option}급
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      setSelectedGrade(option);
+                    }}
+                    className={className}
+                  >
+                    {option}급
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 

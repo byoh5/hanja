@@ -214,26 +214,28 @@ export function HomePage() {
 
       <footer className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-[0.08em] text-slate-500">급수 선택</p>
-        <div className="segment-control">
-          {GRADE_OPTIONS.map((grade) => {
-            const isActive = grade === effectiveGrade;
-            const className = ['segment-btn', isActive ? 'segment-btn-active' : '']
-              .filter(Boolean)
-              .join(' ');
+        <div className="overflow-x-auto pb-1">
+          <div className="segment-control min-w-max">
+            {GRADE_OPTIONS.map((grade) => {
+              const isActive = grade === effectiveGrade;
+              const className = ['segment-btn', isActive ? 'segment-btn-active' : '']
+                .filter(Boolean)
+                .join(' ');
 
-            return (
-              <button
-                key={grade}
-                type="button"
-                onClick={() => {
-                  void pickGrade(grade);
-                }}
-                className={className}
-              >
-                {grade}급
-              </button>
-            );
-          })}
+              return (
+                <button
+                  key={grade}
+                  type="button"
+                  onClick={() => {
+                    void pickGrade(grade);
+                  }}
+                  className={className}
+                >
+                  {grade}급
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
