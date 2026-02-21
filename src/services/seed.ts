@@ -1,9 +1,9 @@
 import { db } from '../db';
-import { GRADE8_CHARS } from '../data/grade8';
+import { GRADE_CHARS_BY_GRADE, SUPPORTED_GRADES } from '../data';
 import { toISODate } from './srs';
 import type { HanjaChar, ProgressItem } from '../types';
 
-const SEED_VERSION = '1';
+const SEED_VERSION = '2';
 
 async function syncGradeChars(grade: number, chars: HanjaChar[]): Promise<void> {
   const sourceSet = new Set(chars.map((item) => item.char));
@@ -22,7 +22,16 @@ async function syncGradeChars(grade: number, chars: HanjaChar[]): Promise<void> 
 
 export async function seedBaseData(): Promise<void> {
   const storageKey = `hanja-step-seed-${SEED_VERSION}`;
-  await syncGradeChars(8, GRADE8_CHARS);
+  const alreadySeeded = localStorage.getItem(storageKey) === 'done';
+  const hasAnyData = (await db.chars.count()) > 0;
+
+  if (alreadySeeded && hasAnyData) {
+    return;
+  }
+
+  for (const grade of SUPPORTED_GRADES) {
+    await syncGradeChars(grade, GRADE_CHARS_BY_GRADE[grade]);
+  }
 
   localStorage.setItem(storageKey, 'done');
 }

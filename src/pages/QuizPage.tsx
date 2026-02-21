@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { SUPPORTED_GRADES } from '../data';
 import { trackEvent } from '../services/analytics';
 import { getCharsByGrade, saveQuizOutcome } from '../services/progress';
 import { generateQuestions } from '../services/quiz';
@@ -14,7 +15,7 @@ interface RetryLocationState {
 type QuizFeedback = 'idle' | 'correct' | 'retry';
 
 const QUIZ_MODE: QuizMode = 'meaning';
-const GRADE_OPTIONS = [8, 7, 6] as const;
+const GRADE_OPTIONS = SUPPORTED_GRADES;
 const QUESTION_OPTIONS = [10, 20] as const;
 
 export function QuizPage() {
@@ -25,7 +26,7 @@ export function QuizPage() {
 
   const retryState = location.state as RetryLocationState | null;
 
-  const [configuredGrade, setConfiguredGrade] = useState<number>(grade ?? 8);
+  const [configuredGrade, setConfiguredGrade] = useState<number>(grade ?? GRADE_OPTIONS[0]);
   const [questionCount, setQuestionCount] = useState<number>(10);
 
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -133,10 +134,6 @@ export function QuizPage() {
   }, [currentIndex, questions.length, running]);
 
   async function startQuiz(): Promise<void> {
-    if (configuredGrade !== 8) {
-      return;
-    }
-
     const targetGrade = configuredGrade;
     setSelectedGrade(targetGrade);
 
@@ -247,13 +244,8 @@ export function QuizPage() {
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">급수</p>
               <div className="segment-control">
                 {GRADE_OPTIONS.map((option) => {
-                  const isAvailable = option === 8;
                   const isActive = configuredGrade === option;
-                  const className = [
-                    'segment-btn',
-                    isActive ? 'segment-btn-active' : '',
-                    !isAvailable ? 'segment-btn-disabled' : ''
-                  ]
+                  const className = ['segment-btn', isActive ? 'segment-btn-active' : '']
                     .filter(Boolean)
                     .join(' ');
 
@@ -261,7 +253,6 @@ export function QuizPage() {
                     <button
                       key={option}
                       type="button"
-                      disabled={!isAvailable}
                       onClick={() => {
                         setConfiguredGrade(option);
                       }}

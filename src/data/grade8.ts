@@ -53,5 +53,3 @@ export const GRADE8_CHARS: HanjaChar[] = [
   { char: '兄', grade: 8, reading: '형', meaning: '형', examples: ['형제', '형님'] },
   { char: '火', grade: 8, reading: '화', meaning: '불', examples: ['화재', '화산'] }
 ];
-
-export const SUPPORTED_GRADES = [8] as const;

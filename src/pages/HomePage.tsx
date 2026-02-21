@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { SUPPORTED_GRADES } from '../data';
 import { getDashboardStats } from '../services/progress';
 import { trackEvent } from '../services/analytics';
 import { ensureGradeProgress, seedBaseData } from '../services/seed';
 import { useAppStore } from '../store/useAppStore';
 import type { DashboardStats } from '../types';
 
-const GRADE_OPTIONS = [8, 7, 6] as const;
+const GRADE_OPTIONS = SUPPORTED_GRADES;
 
 function formatToday(now: Date): string {
   return new Intl.DateTimeFormat('ko-KR', {
@@ -33,7 +34,7 @@ export function HomePage() {
   const resetGrade = useAppStore((state) => state.resetGrade);
   const navigate = useNavigate();
 
-  const effectiveGrade = selectedGrade ?? 8;
+  const effectiveGrade = selectedGrade ?? GRADE_OPTIONS[0];
 
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -52,9 +53,6 @@ export function HomePage() {
   }
 
   async function pickGrade(grade: number): Promise<void> {
-    if (grade !== 8) {
-      return;
-    }
     setSelectedGrade(grade);
     trackEvent('grade_selected', { grade });
     await initialize(grade);
@@ -122,12 +120,7 @@ export function HomePage() {
         <div className="segment-control">
           {GRADE_OPTIONS.map((grade) => {
             const isActive = grade === effectiveGrade;
-            const isAvailable = grade === 8;
-            const className = [
-              'segment-btn',
-              isActive ? 'segment-btn-active' : '',
-              !isAvailable ? 'segment-btn-disabled' : ''
-            ]
+            const className = ['segment-btn', isActive ? 'segment-btn-active' : '']
               .filter(Boolean)
               .join(' ');
 
@@ -138,7 +131,6 @@ export function HomePage() {
                 onClick={() => {
                   void pickGrade(grade);
                 }}
-                disabled={!isAvailable}
                 className={className}
               >
                 {grade}급
