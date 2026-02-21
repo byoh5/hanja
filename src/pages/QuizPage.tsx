@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SUPPORTED_GRADES } from '../data';
 import { trackEvent } from '../services/analytics';
@@ -17,6 +17,8 @@ type QuizFeedback = 'idle' | 'correct' | 'retry';
 const QUIZ_MODE: QuizMode = 'meaning';
 const GRADE_OPTIONS = SUPPORTED_GRADES;
 const QUESTION_OPTIONS = [10, 20] as const;
+const CORRECT_AUTO_ADVANCE_DELAY_MS = 850;
+const WRONG_AUTO_ADVANCE_DELAY_MS = 2200;
 
 export function QuizPage() {
   const grade = useAppStore((state) => state.selectedGrade);
@@ -38,9 +40,17 @@ export function QuizPage() {
   const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const autoAdvanceTimerRef = useRef<number | null>(null);
 
   const current = questions[currentIndex] ?? null;
   const isLastQuestion = currentIndex === questions.length - 1;
+
+  function clearAutoAdvanceTimer(): void {
+    if (autoAdvanceTimerRef.current !== null) {
+      window.clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+  }
 
   useEffect(() => {
     if (grade) {
@@ -54,6 +64,8 @@ export function QuizPage() {
       return;
     }
 
+    clearAutoAdvanceTimer();
+
     setQuestions(retryQuestions);
     setStartedAt(new Date());
     setCurrentIndex(0);
@@ -66,6 +78,12 @@ export function QuizPage() {
 
     trackEvent('quiz_retry_started', { count: retryQuestions.length });
   }, [retryState, running]);
+
+  useEffect(() => {
+    return () => {
+      clearAutoAdvanceTimer();
+    };
+  }, []);
 
   const finishQuiz = useCallback(
     async (finalAnswers: Record<string, string>) => {
@@ -136,6 +154,7 @@ export function QuizPage() {
   async function startQuiz(): Promise<void> {
     const targetGrade = configuredGrade;
     setSelectedGrade(targetGrade);
+    clearAutoAdvanceTimer();
 
     setErrorMessage(null);
     await seedBaseData();
@@ -172,34 +191,33 @@ export function QuizPage() {
   }
 
   function handleOptionSelect(option: string): void {
-    if (submitting || !current) {
+    if (submitting || !current || selectedOption) {
       return;
     }
 
-    setSelectedOption(option);
-    setFeedback(option === current.correctAnswer ? 'correct' : 'retry');
-  }
-
-  function handleNext(): void {
-    if (!current || !selectedOption || submitting) {
-      return;
-    }
-
+    const isCorrect = option === current.correctAnswer;
     const updated = {
       ...answerMap,
-      [current.id]: selectedOption
+      [current.id]: option
     };
 
+    setSelectedOption(option);
+    setFeedback(isCorrect ? 'correct' : 'retry');
     setAnswerMap(updated);
-    setSelectedOption(null);
-    setFeedback('idle');
+    clearAutoAdvanceTimer();
+    const autoAdvanceDelay = isCorrect ? CORRECT_AUTO_ADVANCE_DELAY_MS : WRONG_AUTO_ADVANCE_DELAY_MS;
+    autoAdvanceTimerRef.current = window.setTimeout(() => {
+      autoAdvanceTimerRef.current = null;
 
-    if (isLastQuestion) {
-      void finishQuiz(updated);
-      return;
-    }
+      if (isLastQuestion) {
+        void finishQuiz(updated);
+        return;
+      }
 
-    setCurrentIndex((prev) => prev + 1);
+      setCurrentIndex((prev) => prev + 1);
+      setSelectedOption(null);
+      setFeedback('idle');
+    }, autoAdvanceDelay);
   }
 
   function optionClass(option: string): string {
@@ -340,10 +358,11 @@ export function QuizPage() {
             <button
               key={option}
               type="button"
+              disabled={Boolean(selectedOption) || submitting}
               onClick={() => {
                 handleOptionSelect(option);
               }}
-              className={optionClass(option)}
+              className={`${optionClass(option)} disabled:cursor-not-allowed disabled:opacity-90`}
             >
               {option}
             </button>
@@ -351,20 +370,13 @@ export function QuizPage() {
         </div>
 
         {selectedOption && feedback === 'correct' && (
-          <p className="mt-4 text-sm font-medium text-emerald-700">좋아요. 정확해요.</p>
+          <p className="mt-4 text-sm font-medium text-emerald-700">좋아요. 정확해요. 자동으로 다음 문제로 이동합니다.</p>
         )}
         {selectedOption && feedback === 'retry' && (
-          <p className="mt-4 text-sm font-medium text-coral-500">한번 더 볼까요?</p>
+          <p className="mt-4 text-sm font-medium text-coral-500">
+            정답은 {current.correctAnswer}입니다. 자동으로 다음 문제로 이동합니다.
+          </p>
         )}
-
-        <button
-          type="button"
-          disabled={!selectedOption || submitting}
-          onClick={handleNext}
-          className="btn-primary mt-5 px-5 py-3 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isLastQuestion ? '제출하기' : '다음 문제'}
-        </button>
       </article>
     </section>
   );
