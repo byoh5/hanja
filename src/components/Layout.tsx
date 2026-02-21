@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { useAppStore } from '../store/useAppStore';
 
 function navClass(isActive: boolean): string {
   return isActive ? 'segment-btn segment-btn-active' : 'segment-btn';
@@ -7,6 +8,8 @@ function navClass(isActive: boolean): string {
 
 export function Layout() {
   const isOnline = useOnlineStatus();
+  const speechEnabled = useAppStore((state) => state.speechEnabled);
+  const toggleSpeechEnabled = useAppStore((state) => state.toggleSpeechEnabled);
 
   return (
     <div className="min-h-screen text-ink">
@@ -21,7 +24,9 @@ export function Layout() {
           <Link to="/" className="text-2xl font-semibold tracking-tight text-ink">
             HanjaStep
           </Link>
-          <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400">Focus</p>
+          <button type="button" onClick={toggleSpeechEnabled} className="btn-muted px-3 py-1.5 text-xs">
+            음성 {speechEnabled ? 'ON' : 'OFF'}
+          </button>
         </header>
 
         <nav className="mb-6 overflow-x-auto pb-1">

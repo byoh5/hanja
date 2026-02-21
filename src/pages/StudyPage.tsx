@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { MeaningReadingPanel } from '../components/MeaningReadingPanel';
 import { trackEvent } from '../services/analytics';
 import { applyStudyAction, getStudyQueue } from '../services/progress';
 import { ensureGradeProgress, seedBaseData } from '../services/seed';
+import { speakMeaningReadingRepeated, stopSpeaking } from '../services/tts';
 import { useAppStore } from '../store/useAppStore';
 import type { StudyCardItem } from '../types';
 
@@ -10,6 +12,7 @@ type CardMotion = 'idle' | 'good' | 'again';
 
 export function StudyPage() {
   const grade = useAppStore((state) => state.selectedGrade);
+  const speechEnabled = useAppStore((state) => state.speechEnabled);
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -18,6 +21,8 @@ export function StudyPage() {
   const [items, setItems] = useState<StudyCardItem[]>([]);
 
   const actionTimerRef = useRef<number | null>(null);
+  const autoSpeakTimerRef = useRef<number | null>(null);
+  const current = items[0] ?? null;
 
   useEffect(() => {
     if (!grade) {
@@ -33,8 +38,38 @@ export function StudyPage() {
       if (actionTimerRef.current !== null) {
         window.clearTimeout(actionTimerRef.current);
       }
+      if (autoSpeakTimerRef.current !== null) {
+        window.clearTimeout(autoSpeakTimerRef.current);
+      }
+      stopSpeaking();
     };
   }, []);
+
+  useEffect(() => {
+    if (!current) {
+      return;
+    }
+
+    if (!speechEnabled) {
+      stopSpeaking();
+      return;
+    }
+
+    if (autoSpeakTimerRef.current !== null) {
+      window.clearTimeout(autoSpeakTimerRef.current);
+    }
+
+    autoSpeakTimerRef.current = window.setTimeout(() => {
+      speakMeaningReadingRepeated(current.charInfo.meaning, current.charInfo.reading, current.charInfo.char, 2, 360);
+    }, 220);
+
+    return () => {
+      if (autoSpeakTimerRef.current !== null) {
+        window.clearTimeout(autoSpeakTimerRef.current);
+      }
+      stopSpeaking();
+    };
+  }, [current?.charInfo.char, speechEnabled]);
 
   async function loadQueue(targetGrade: number): Promise<void> {
     setLoading(true);
@@ -45,8 +80,6 @@ export function StudyPage() {
     setItems(queue);
     setLoading(false);
   }
-
-  const current = items[0] ?? null;
 
   const remainCount = useMemo(() => {
     if (items.length === 0) {
@@ -95,6 +128,10 @@ export function StudyPage() {
     if (actionTimerRef.current !== null) {
       window.clearTimeout(actionTimerRef.current);
     }
+    if (autoSpeakTimerRef.current !== null) {
+      window.clearTimeout(autoSpeakTimerRef.current);
+    }
+    stopSpeaking();
 
     setAnimating(true);
     setMotion(action === 'known' ? 'good' : 'again');
@@ -163,9 +200,13 @@ export function StudyPage() {
             {current.charInfo.char}
           </p>
 
-          <p className="mt-6 text-base text-slate-500">
-            {current.charInfo.reading} / {current.charInfo.meaning}
-          </p>
+          <MeaningReadingPanel
+            className="mx-auto mt-6 w-full max-w-md"
+            char={current.charInfo.char}
+            meaning={current.charInfo.meaning}
+            reading={current.charInfo.reading}
+            speechEnabled={speechEnabled}
+          />
 
           <div className="my-6 h-px w-full max-w-sm bg-slate-200" />
 

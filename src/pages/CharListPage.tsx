@@ -259,7 +259,7 @@ export function CharListPage() {
               return (
                 <li key={item.char}>
                   <div
-                    title={`${item.char} · ${item.reading}/${item.meaning} · ${statusLabel(status)}`}
+                    title={`${item.char} · 뜻: ${item.meaning} · 음: ${item.reading} · ${statusLabel(status)}`}
                     className={`flex h-10 w-full flex-col items-center justify-center rounded-[10px] border text-[13px] font-semibold leading-none ${statusClass(status)}`}
                   >
                     <span>{item.char}</span>

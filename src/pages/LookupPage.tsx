@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import { MeaningReadingPanel } from '../components/MeaningReadingPanel';
 import { lookupChar } from '../services/progress';
 import { seedBaseData } from '../services/seed';
+import { useAppStore } from '../store/useAppStore';
 import type { HanjaChar } from '../types';
 
 export function LookupPage() {
+  const speechEnabled = useAppStore((state) => state.speechEnabled);
   const [query, setQuery] = useState('');
   const [ready, setReady] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -75,9 +78,13 @@ export function LookupPage() {
             <div className="rounded-[20px] bg-calm-50 px-5 py-6">
               <p className="text-6xl font-semibold tracking-[0.1em] text-ink">{result.char}</p>
               <p className="mt-3 text-base text-slate-700">{result.grade}급 배정 한자입니다.</p>
-              <p className="mt-2 text-sm text-slate-600">
-                {result.reading} / {result.meaning}
-              </p>
+              <MeaningReadingPanel
+                className="mx-auto mt-4 w-full max-w-xs"
+                char={result.char}
+                meaning={result.meaning}
+                reading={result.reading}
+                speechEnabled={speechEnabled}
+              />
             </div>
           )}
 
