@@ -21,6 +21,10 @@ export async function getCharsByGrade(grade: number): Promise<HanjaChar[]> {
   return db.chars.where('grade').equals(grade).toArray();
 }
 
+export async function getProgressByGrade(grade: number): Promise<ProgressItem[]> {
+  return db.progress.where('grade').equals(grade).toArray();
+}
+
 export async function getDashboardStats(grade: number): Promise<DashboardStats> {
   const progressRows = await db.progress.where('grade').equals(grade).toArray();
   const today = toISODate(new Date());

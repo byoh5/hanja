@@ -143,6 +143,9 @@ export function HomePage() {
           <Link to="/review" className="btn-muted px-4 py-2 text-sm">
             오늘 복습 보기
           </Link>
+          <Link to="/chars" className="btn-muted px-4 py-2 text-sm">
+            전체 목록
+          </Link>
           <Link to="/lookup" className="btn-muted px-4 py-2 text-sm">
             급수 조회
           </Link>

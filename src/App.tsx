@@ -1,5 +1,6 @@
 import { HashRouter, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { CharListPage } from './pages/CharListPage';
 import { HomePage } from './pages/HomePage';
 import { LookupPage } from './pages/LookupPage';
 import { QuizPage } from './pages/QuizPage';
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="/quiz" element={<QuizPage />} />
           <Route path="/review" element={<ReviewPage />} />
           <Route path="/lookup" element={<LookupPage />} />
+          <Route path="/chars" element={<CharListPage />} />
           <Route path="/result" element={<ResultPage />} />
         </Route>
       </Routes>
