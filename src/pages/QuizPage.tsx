@@ -4,6 +4,7 @@ import { SUPPORTED_GRADES } from '../data';
 import { trackEvent } from '../services/analytics';
 import { getCharsByGrade, getProgressByGrade, saveQuizOutcome } from '../services/progress';
 import { generateQuestions } from '../services/quiz';
+import { createRetryQuestion, getBaseQuestionId, insertQuestionAfterGap } from '../services/quizReinforcement';
 import { ensureGradeProgress, seedBaseData } from '../services/seed';
 import { useAppStore } from '../store/useAppStore';
 import type { QuestionType, QuizAnswer, QuizMode, QuizQuestion, QuizResult, QuizTypeStat } from '../types';
@@ -18,6 +19,7 @@ const GRADE_OPTIONS = SUPPORTED_GRADES;
 const QUESTION_OPTIONS = [10, 20, 50] as const;
 const CORRECT_AUTO_ADVANCE_DELAY_MS = 850;
 const WRONG_AUTO_ADVANCE_DELAY_MS = 2200;
+const RETRY_INSERT_GAP = 2;
 
 const MODE_OPTIONS: Array<{ mode: QuizMode; label: string; description: string }> = [
   { mode: 'meaning', label: '뜻 고르기', description: '한자 -> 뜻 4지선다' },
@@ -87,6 +89,7 @@ function buildTypeStats(answers: QuizAnswer[]): QuizTypeStat[] {
 export function QuizPage() {
   const grade = useAppStore((state) => state.selectedGrade);
   const setSelectedGrade = useAppStore((state) => state.setSelectedGrade);
+  const memoryBoostEnabled = useAppStore((state) => state.memoryBoostEnabled);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -107,10 +110,12 @@ export function QuizPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
+  const [scheduledRetry, setScheduledRetry] = useState(false);
   const autoAdvanceTimerRef = useRef<number | null>(null);
+  const retryCounterRef = useRef(0);
+  const scheduledRetryBaseRef = useRef<Set<string>>(new Set());
 
   const current = questions[currentIndex] ?? null;
-  const isLastQuestion = currentIndex === questions.length - 1;
 
   function clearAutoAdvanceTimer(): void {
     if (autoAdvanceTimerRef.current !== null) {
@@ -132,6 +137,8 @@ export function QuizPage() {
     }
 
     clearAutoAdvanceTimer();
+    retryCounterRef.current = 0;
+    scheduledRetryBaseRef.current = new Set();
 
     setQuestions(retryQuestions);
     setStartedAt(new Date());
@@ -142,6 +149,7 @@ export function QuizPage() {
     setQuestionCount(retryQuestions.length);
     setErrorMessage(null);
     setInputValue('');
+    setScheduledRetry(false);
     setConfiguredMode('mixed');
     setActiveMode('mixed');
     setRunning(true);
@@ -230,6 +238,8 @@ export function QuizPage() {
     const targetGrade = configuredGrade;
     setSelectedGrade(targetGrade);
     clearAutoAdvanceTimer();
+    retryCounterRef.current = 0;
+    scheduledRetryBaseRef.current = new Set();
 
     setErrorMessage(null);
     await seedBaseData();
@@ -263,6 +273,7 @@ export function QuizPage() {
     setFeedback('idle');
     setAnswerMap({});
     setInputValue('');
+    setScheduledRetry(false);
     setActiveMode(configuredMode);
     setRunning(true);
 
@@ -274,14 +285,39 @@ export function QuizPage() {
     });
   }
 
-  function queueAdvance(isCorrect: boolean, updatedAnswers: Record<string, string>): void {
+  function scheduleRetryQuestion(question: QuizQuestion, isCorrect: boolean): number {
+    if (isCorrect || !memoryBoostEnabled) {
+      return 0;
+    }
+
+    const baseId = getBaseQuestionId(question.id);
+    if (scheduledRetryBaseRef.current.has(baseId)) {
+      return 0;
+    }
+
+    retryCounterRef.current += 1;
+    scheduledRetryBaseRef.current.add(baseId);
+
+    const retryQuestion = createRetryQuestion(question, retryCounterRef.current);
+    setQuestions((prev) => insertQuestionAfterGap(prev, currentIndex, retryQuestion, RETRY_INSERT_GAP));
+    trackEvent('quiz_retry_scheduled', { baseId, gap: RETRY_INSERT_GAP });
+
+    return 1;
+  }
+
+  function queueAdvance(
+    isCorrect: boolean,
+    updatedAnswers: Record<string, string>,
+    appendedQuestionCount = 0
+  ): void {
     clearAutoAdvanceTimer();
 
     const autoAdvanceDelay = isCorrect ? CORRECT_AUTO_ADVANCE_DELAY_MS : WRONG_AUTO_ADVANCE_DELAY_MS;
     autoAdvanceTimerRef.current = window.setTimeout(() => {
       autoAdvanceTimerRef.current = null;
 
-      if (isLastQuestion) {
+      const totalAfterAppend = questions.length + appendedQuestionCount;
+      if (currentIndex >= totalAfterAppend - 1) {
         void finishQuiz(updatedAnswers);
         return;
       }
@@ -290,6 +326,7 @@ export function QuizPage() {
       setSelectedOption(null);
       setFeedback('idle');
       setInputValue('');
+      setScheduledRetry(false);
     }, autoAdvanceDelay);
   }
 
@@ -299,6 +336,7 @@ export function QuizPage() {
     }
 
     const isCorrect = isAnswerCorrect(current, option);
+    const appendedQuestionCount = scheduleRetryQuestion(current, isCorrect);
     const updated = {
       ...answerMap,
       [current.id]: option
@@ -307,7 +345,8 @@ export function QuizPage() {
     setSelectedOption(option);
     setFeedback(isCorrect ? 'correct' : 'retry');
     setAnswerMap(updated);
-    queueAdvance(isCorrect, updated);
+    setScheduledRetry(appendedQuestionCount > 0);
+    queueAdvance(isCorrect, updated, appendedQuestionCount);
   }
 
   function handleInputSubmit(): void {
@@ -321,6 +360,7 @@ export function QuizPage() {
     }
 
     const isCorrect = isAnswerCorrect(current, submitted);
+    const appendedQuestionCount = scheduleRetryQuestion(current, isCorrect);
     const updated = {
       ...answerMap,
       [current.id]: submitted
@@ -329,7 +369,8 @@ export function QuizPage() {
     setSelectedOption(submitted);
     setFeedback(isCorrect ? 'correct' : 'retry');
     setAnswerMap(updated);
-    queueAdvance(isCorrect, updated);
+    setScheduledRetry(appendedQuestionCount > 0);
+    queueAdvance(isCorrect, updated, appendedQuestionCount);
   }
 
   function optionClass(option: string): string {
@@ -364,6 +405,9 @@ export function QuizPage() {
         <header className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-ink">다중 모드 퀴즈</h1>
           <p className="text-sm text-slate-600">학습 상태에 맞는 모드를 선택해 회상 훈련을 진행하세요.</p>
+          <p className="text-xs text-slate-500">
+            암기 강화 모드 {memoryBoostEnabled ? 'ON' : 'OFF'} · OFF/ON 설정은 홈에서 변경할 수 있습니다.
+          </p>
         </header>
 
         <article className="surface-card p-6 sm:p-7">
@@ -548,7 +592,8 @@ export function QuizPage() {
         )}
         {selectedOption && feedback === 'retry' && (
           <p className="mt-4 text-sm font-medium text-coral-500">
-            정답은 {correctAnswerLabel}입니다. 자동으로 다음 문제로 이동합니다.
+            정답은 {correctAnswerLabel}입니다.
+            {scheduledRetry ? ' 같은 문제를 잠시 뒤 다시 보여드립니다.' : ' 자동으로 다음 문제로 이동합니다.'}
           </p>
         )}
         {selectedOption && current.explanation && (

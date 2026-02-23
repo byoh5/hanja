@@ -44,6 +44,8 @@ export function HomePage() {
   const setSelectedGrade = useAppStore((state) => state.setSelectedGrade);
   const dailyStudyTarget = useAppStore((state) => state.dailyStudyTarget);
   const setDailyStudyTarget = useAppStore((state) => state.setDailyStudyTarget);
+  const memoryBoostEnabled = useAppStore((state) => state.memoryBoostEnabled);
+  const setMemoryBoostEnabled = useAppStore((state) => state.setMemoryBoostEnabled);
   const resetGrade = useAppStore((state) => state.resetGrade);
   const navigate = useNavigate();
 
@@ -218,6 +220,35 @@ export function HomePage() {
       </article>
 
       <footer className="space-y-3">
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-slate-500">학습 방식</p>
+          <div className="overflow-x-auto pb-1">
+            <div className="segment-control min-w-max">
+              <button
+                type="button"
+                onClick={() => {
+                  setMemoryBoostEnabled(true);
+                  trackEvent('memory_boost_toggled', { enabled: true });
+                }}
+                className={memoryBoostEnabled ? 'segment-btn segment-btn-active' : 'segment-btn'}
+              >
+                암기 강화
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMemoryBoostEnabled(false);
+                  trackEvent('memory_boost_toggled', { enabled: false });
+                }}
+                className={!memoryBoostEnabled ? 'segment-btn segment-btn-active' : 'segment-btn'}
+              >
+                표준
+              </button>
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">회상 후 정답 공개, 헷갈림 판정, 오답 간격 재출제가 적용됩니다.</p>
+        </div>
+
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-slate-500">하루 학습량</p>
           <div className="overflow-x-auto pb-1">

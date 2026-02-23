@@ -6,10 +6,11 @@ import type {
   QuizAnswer,
   QuizMode,
   ReviewListItem,
+  StudyAction,
   SessionRecord,
   StudyCardItem
 } from '../types';
-import { buildDailyQueue, fromISODate, markKnown, markRetry, toISODate } from './srs';
+import { buildDailyQueue, fromISODate, markHard, markKnown, markRetry, toISODate } from './srs';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -66,14 +67,14 @@ export async function getStudyQueue(
 export async function applyStudyAction(
   char: string,
   grade: number,
-  action: 'known' | 'retry'
+  action: StudyAction
 ): Promise<ProgressItem | null> {
   const current = await db.progress.get([char, grade]);
   if (!current) {
     return null;
   }
 
-  const updated = action === 'known' ? markKnown(current) : markRetry(current);
+  const updated = action === 'known' ? markKnown(current) : action === 'hard' ? markHard(current) : markRetry(current);
   await db.progress.put(updated);
 
   return updated;

@@ -52,6 +52,27 @@ export function markKnown(item: ProgressItem, today = new Date()): ProgressItem 
   };
 }
 
+export function markHard(item: ProgressItem, today = new Date()): ProgressItem {
+  const streak = Math.max(item.streak - 1, 0);
+  const interval = 1;
+  const dueDate = toISODate(addDays(today, interval));
+
+  let state: ProgressItem['state'] = 'LEARNING';
+  if (streak >= 2) {
+    state = 'REVIEW';
+  }
+
+  return {
+    ...item,
+    state,
+    streak,
+    interval,
+    dueDate,
+    wrongCount: item.wrongCount + 1,
+    lastReviewedAt: today.toISOString()
+  };
+}
+
 export function markRetry(item: ProgressItem, today = new Date()): ProgressItem {
   return {
     ...item,

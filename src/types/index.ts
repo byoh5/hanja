@@ -24,6 +24,8 @@ export interface StudyCardItem {
   progress: ProgressItem;
 }
 
+export type StudyAction = 'known' | 'hard' | 'retry';
+
 export type QuizMode = 'meaning' | 'reading' | 'character' | 'mixed' | 'inputCharacter' | 'inputReading' | 'weakness';
 
 export type QuestionType = 'meaning' | 'reading' | 'character' | 'inputCharacter' | 'inputReading';

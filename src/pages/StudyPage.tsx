@@ -7,20 +7,31 @@ import { ensureGradeProgress, seedBaseData } from '../services/seed';
 import { resolveStudyPace } from '../services/studyPlan';
 import { speakMeaningReadingRepeated, stopSpeaking } from '../services/tts';
 import { useAppStore } from '../store/useAppStore';
-import type { StudyCardItem } from '../types';
+import type { StudyAction, StudyCardItem } from '../types';
 
 type CardMotion = 'idle' | 'good' | 'again';
+const RETRY_GAP = 1;
+const HARD_GAP = 3;
+
+function insertAfterGap(queue: StudyCardItem[], card: StudyCardItem, gap: number): StudyCardItem[] {
+  const next = [...queue];
+  const insertIndex = Math.min(next.length, Math.max(0, Math.floor(gap)));
+  next.splice(insertIndex, 0, card);
+  return next;
+}
 
 export function StudyPage() {
   const grade = useAppStore((state) => state.selectedGrade);
   const speechEnabled = useAppStore((state) => state.speechEnabled);
   const dailyStudyTarget = useAppStore((state) => state.dailyStudyTarget);
+  const memoryBoostEnabled = useAppStore((state) => state.memoryBoostEnabled);
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [animating, setAnimating] = useState(false);
   const [motion, setMotion] = useState<CardMotion>('idle');
   const [items, setItems] = useState<StudyCardItem[]>([]);
+  const [revealed, setRevealed] = useState(!memoryBoostEnabled);
 
   const actionTimerRef = useRef<number | null>(null);
   const autoSpeakTimerRef = useRef<number | null>(null);
@@ -49,11 +60,15 @@ export function StudyPage() {
   }, []);
 
   useEffect(() => {
+    setRevealed(!memoryBoostEnabled);
+  }, [current?.charInfo.char, memoryBoostEnabled]);
+
+  useEffect(() => {
     if (!current) {
       return;
     }
 
-    if (!speechEnabled) {
+    if (!speechEnabled || (memoryBoostEnabled && !revealed)) {
       stopSpeaking();
       return;
     }
@@ -72,7 +87,7 @@ export function StudyPage() {
       }
       stopSpeaking();
     };
-  }, [current?.charInfo.char, speechEnabled]);
+  }, [current?.charInfo.char, memoryBoostEnabled, revealed, speechEnabled]);
 
   async function loadQueue(targetGrade: number, maxItems: number, newLimit: number): Promise<void> {
     setLoading(true);
@@ -91,7 +106,7 @@ export function StudyPage() {
     return items.length - 1;
   }, [items.length]);
 
-  async function applyAction(action: 'known' | 'retry'): Promise<void> {
+  async function applyAction(action: StudyAction): Promise<void> {
     if (!grade || !current || busy) {
       return;
     }
@@ -101,7 +116,8 @@ export function StudyPage() {
     const updated = await applyStudyAction(current.charInfo.char, grade, action);
 
     if (updated) {
-      trackEvent(action === 'known' ? 'card_known' : 'card_retry', {
+      const eventName = action === 'known' ? 'card_known' : action === 'hard' ? 'card_hard' : 'card_retry';
+      trackEvent(eventName, {
         char: current.charInfo.char,
         grade
       });
@@ -110,12 +126,14 @@ export function StudyPage() {
         setItems((prev) => prev.slice(1));
       } else {
         setItems((prev) => {
-          if (prev.length <= 1) {
-            return [{ ...prev[0], progress: updated }];
+          if (prev.length === 0) {
+            return prev;
           }
 
           const [first, ...rest] = prev;
-          return [...rest, { ...first, progress: updated }];
+          const nextCard = { ...first, progress: updated };
+          const gap = action === 'hard' ? HARD_GAP : RETRY_GAP;
+          return insertAfterGap(rest, nextCard, gap);
         });
       }
     }
@@ -123,8 +141,8 @@ export function StudyPage() {
     setBusy(false);
   }
 
-  function queueAction(action: 'known' | 'retry'): void {
-    if (!current || busy || animating) {
+  function queueAction(action: StudyAction): void {
+    if (!current || busy || animating || (memoryBoostEnabled && !revealed)) {
       return;
     }
 
@@ -143,8 +161,9 @@ export function StudyPage() {
       void applyAction(action).finally(() => {
         setMotion('idle');
         setAnimating(false);
+        setRevealed(!memoryBoostEnabled);
       });
-    }, action === 'known' ? 260 : 320);
+    }, action === 'known' ? 260 : action === 'hard' ? 300 : 320);
   }
 
   if (!grade) {
@@ -190,7 +209,10 @@ export function StudyPage() {
   return (
     <section className="space-y-4">
       <header className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold tracking-tight text-ink">한자 학습</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-ink">
+          한자 학습
+          {memoryBoostEnabled && <span className="ml-2 text-xs font-medium text-calm-600">암기 강화</span>}
+        </h1>
         <p className="text-sm text-slate-500">남은 카드 {remainCount}개</p>
       </header>
 
@@ -203,42 +225,83 @@ export function StudyPage() {
             {current.charInfo.char}
           </p>
 
-          <MeaningReadingPanel
-            className="mx-auto mt-6 w-full max-w-md"
-            char={current.charInfo.char}
-            meaning={current.charInfo.meaning}
-            reading={current.charInfo.reading}
-            speechEnabled={speechEnabled}
-          />
+          {memoryBoostEnabled && !revealed && (
+            <div className="mt-6 w-full max-w-md rounded-[18px] border border-calm-100 bg-calm-50 px-4 py-4 text-left">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-calm-700">Active Recall</p>
+              <p className="mt-1 text-sm text-slate-700">뜻과 음을 먼저 떠올린 뒤 정답을 확인하세요.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setRevealed(true);
+                  trackEvent('study_recall_revealed', { char: current.charInfo.char, grade });
+                }}
+                className="btn-primary mt-3 w-full px-4 py-2"
+              >
+                정답 확인
+              </button>
+            </div>
+          )}
 
-          <div className="my-6 h-px w-full max-w-sm bg-slate-200" />
+          {(!memoryBoostEnabled || revealed) && (
+            <>
+              <MeaningReadingPanel
+                className="mx-auto mt-6 w-full max-w-md"
+                char={current.charInfo.char}
+                meaning={current.charInfo.meaning}
+                reading={current.charInfo.reading}
+                speechEnabled={speechEnabled}
+              />
 
-          <p className="text-sm text-slate-600">예시: {current.charInfo.examples[0]}</p>
+              <div className="my-6 h-px w-full max-w-sm bg-slate-200" />
+
+              <p className="text-sm text-slate-600">예시: {current.charInfo.examples[0]}</p>
+            </>
+          )}
         </div>
       </article>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <button
-          type="button"
-          disabled={busy || animating}
-          onClick={() => {
-            queueAction('retry');
-          }}
-          className="btn-muted px-5 py-4 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          다시보기
-        </button>
-        <button
-          type="button"
-          disabled={busy || animating}
-          onClick={() => {
-            queueAction('known');
-          }}
-          className="btn-primary px-5 py-4 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          알겠어요
-        </button>
-      </div>
+      {memoryBoostEnabled && !revealed && (
+        <p className="text-center text-sm text-slate-500">정답을 확인한 뒤 평가 버튼이 활성화됩니다.</p>
+      )}
+
+      {(!memoryBoostEnabled || revealed) && (
+        <div className={`grid gap-3 ${memoryBoostEnabled ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+          <button
+            type="button"
+            disabled={busy || animating}
+            onClick={() => {
+              queueAction('retry');
+            }}
+            className="btn-muted px-5 py-4 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            모르겠어요
+          </button>
+
+          {memoryBoostEnabled && (
+            <button
+              type="button"
+              disabled={busy || animating}
+              onClick={() => {
+                queueAction('hard');
+              }}
+              className="btn-muted px-5 py-4 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              헷갈려요
+            </button>
+          )}
+
+          <button
+            type="button"
+            disabled={busy || animating}
+            onClick={() => {
+              queueAction('known');
+            }}
+            className="btn-primary px-5 py-4 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            알겠어요
+          </button>
+        </div>
+      )}
     </section>
   );
 }

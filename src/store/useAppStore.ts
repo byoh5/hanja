@@ -5,9 +5,11 @@ interface AppStore {
   selectedGrade: number | null;
   speechEnabled: boolean;
   dailyStudyTarget: number;
+  memoryBoostEnabled: boolean;
   setSelectedGrade: (grade: number) => void;
   toggleSpeechEnabled: () => void;
   setDailyStudyTarget: (target: number) => void;
+  setMemoryBoostEnabled: (enabled: boolean) => void;
   resetGrade: () => void;
 }
 
@@ -17,6 +19,7 @@ export const useAppStore = create<AppStore>()(
       selectedGrade: null,
       speechEnabled: true,
       dailyStudyTarget: 20,
+      memoryBoostEnabled: true,
       setSelectedGrade: (grade) => {
         set({ selectedGrade: grade });
       },
@@ -25,6 +28,9 @@ export const useAppStore = create<AppStore>()(
       },
       setDailyStudyTarget: (target) => {
         set({ dailyStudyTarget: target });
+      },
+      setMemoryBoostEnabled: (enabled) => {
+        set({ memoryBoostEnabled: enabled });
       },
       resetGrade: () => {
         set({ selectedGrade: null });
@@ -35,7 +41,8 @@ export const useAppStore = create<AppStore>()(
       partialize: (state) => ({
         selectedGrade: state.selectedGrade,
         speechEnabled: state.speechEnabled,
-        dailyStudyTarget: state.dailyStudyTarget
+        dailyStudyTarget: state.dailyStudyTarget,
+        memoryBoostEnabled: state.memoryBoostEnabled
       })
     }
   )

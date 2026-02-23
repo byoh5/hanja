@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProgressItem } from '../types';
-import { buildDailyQueue, markKnown, markRetry, toISODate } from './srs';
+import { buildDailyQueue, markHard, markKnown, markRetry, toISODate } from './srs';
 
 function baseProgress(partial?: Partial<ProgressItem>): ProgressItem {
   return {
@@ -45,6 +45,26 @@ describe('srs', () => {
     expect(next.state).toBe('LEARNING');
     expect(next.wrongCount).toBe(3);
     expect(next.dueDate).toBe('2026-02-20');
+  });
+
+  it('헷갈림 처리 시 streak를 완전히 초기화하지 않고 다음 날 재복습으로 보낸다', () => {
+    const today = new Date('2026-02-20T00:00:00Z');
+    const next = markHard(
+      baseProgress({
+        state: 'MASTERED',
+        streak: 5,
+        interval: 14,
+        wrongCount: 1,
+        dueDate: '2026-03-01'
+      }),
+      today
+    );
+
+    expect(next.streak).toBe(4);
+    expect(next.interval).toBe(1);
+    expect(next.state).toBe('REVIEW');
+    expect(next.wrongCount).toBe(2);
+    expect(next.dueDate).toBe('2026-02-21');
   });
 
   it('일일 큐에서 REVIEW를 NEW보다 우선한다', () => {
