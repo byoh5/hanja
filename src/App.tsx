@@ -3,6 +3,7 @@ import { Layout } from './components/Layout';
 import { CharListPage } from './pages/CharListPage';
 import { HomePage } from './pages/HomePage';
 import { LookupPage } from './pages/LookupPage';
+import { PlacementPage } from './pages/PlacementPage';
 import { QuizPage } from './pages/QuizPage';
 import { ResultPage } from './pages/ResultPage';
 import { ReviewPage } from './pages/ReviewPage';
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/quiz" element={<QuizPage />} />
           <Route path="/review" element={<ReviewPage />} />
           <Route path="/lookup" element={<LookupPage />} />
+          <Route path="/placement" element={<PlacementPage />} />
           <Route path="/chars" element={<CharListPage />} />
           <Route path="/result" element={<ResultPage />} />
         </Route>

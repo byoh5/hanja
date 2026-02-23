@@ -46,6 +46,9 @@ export function Layout() {
             <NavLink to="/lookup" className={({ isActive }) => navClass(isActive)}>
               조회
             </NavLink>
+            <NavLink to="/placement" className={({ isActive }) => navClass(isActive)}>
+              레벨
+            </NavLink>
             <NavLink to="/chars" className={({ isActive }) => navClass(isActive)}>
               목록
             </NavLink>

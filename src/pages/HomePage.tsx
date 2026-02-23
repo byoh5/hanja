@@ -4,6 +4,7 @@ import { SUPPORTED_GRADES } from '../data';
 import { getDashboardStats } from '../services/progress';
 import { trackEvent } from '../services/analytics';
 import { ensureGradeProgress, seedBaseData } from '../services/seed';
+import { resolveStudyPace, STUDY_PACE_OPTIONS } from '../services/studyPlan';
 import { useAppStore } from '../store/useAppStore';
 import type { DashboardStats } from '../types';
 
@@ -41,6 +42,8 @@ function buildGreeting(now: Date): string {
 export function HomePage() {
   const selectedGrade = useAppStore((state) => state.selectedGrade);
   const setSelectedGrade = useAppStore((state) => state.setSelectedGrade);
+  const dailyStudyTarget = useAppStore((state) => state.dailyStudyTarget);
+  const setDailyStudyTarget = useAppStore((state) => state.setDailyStudyTarget);
   const resetGrade = useAppStore((state) => state.resetGrade);
   const navigate = useNavigate();
 
@@ -99,9 +102,10 @@ export function HomePage() {
   const dateLabel = useMemo(() => formatToday(new Date()), []);
   const greeting = useMemo(() => buildGreeting(new Date()), []);
   const selectedOverview = gradeOverviews.find((item) => item.grade === effectiveGrade) ?? null;
+  const pace = resolveStudyPace(dailyStudyTarget);
 
-  const todayNewCount = Math.min(selectedOverview?.newCount ?? 0, 10);
-  const reviewCount = Math.min(selectedOverview?.reviewDue ?? 0, 3);
+  const todayNewCount = Math.min(selectedOverview?.newCount ?? 0, pace.newLimit);
+  const reviewCount = Math.min(selectedOverview?.reviewDue ?? 0, Math.max(pace.target - todayNewCount, 0));
   const masteredRatio = (selectedOverview?.mastered ?? 0) / Math.max(selectedOverview?.total ?? 1, 1);
 
   const overallTotal = gradeOverviews.reduce((sum, item) => sum + item.total, 0);
@@ -126,6 +130,7 @@ export function HomePage() {
       <article className="surface-card p-6 sm:p-7">
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Today Learning</p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">{effectiveGrade}급 학습하기</h2>
+        <p className="mt-1 text-sm text-slate-500">하루 목표 {pace.target}카드 ({pace.label})</p>
 
         {loading && <p className="mt-4 text-sm text-slate-500">학습 카드를 준비하는 중...</p>}
 
@@ -133,11 +138,11 @@ export function HomePage() {
           <>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-[20px] bg-calm-50 p-4">
-                <p className="text-sm text-slate-500">오늘 10자</p>
+                <p className="text-sm text-slate-500">신규 목표</p>
                 <p className="mt-1 text-2xl font-semibold text-ink">{todayNewCount}자</p>
               </div>
               <div className="rounded-[20px] bg-slate-100 p-4">
-                <p className="text-sm text-slate-500">복습 3자</p>
+                <p className="text-sm text-slate-500">복습 목표</p>
                 <p className="mt-1 text-2xl font-semibold text-ink">{reviewCount}자</p>
               </div>
             </div>
@@ -213,6 +218,34 @@ export function HomePage() {
       </article>
 
       <footer className="space-y-3">
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-slate-500">하루 학습량</p>
+          <div className="overflow-x-auto pb-1">
+            <div className="segment-control min-w-max">
+              {STUDY_PACE_OPTIONS.map((option) => {
+                const isActive = option.target === pace.target;
+                const className = ['segment-btn', isActive ? 'segment-btn-active' : '']
+                  .filter(Boolean)
+                  .join(' ');
+
+                return (
+                  <button
+                    key={option.target}
+                    type="button"
+                    onClick={() => {
+                      setDailyStudyTarget(option.target);
+                      trackEvent('daily_study_target_changed', { target: option.target });
+                    }}
+                    className={className}
+                  >
+                    {option.target}카드
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
         <p className="text-xs font-medium uppercase tracking-[0.08em] text-slate-500">급수 선택</p>
         <div className="overflow-x-auto pb-1">
           <div className="segment-control min-w-max">
@@ -241,6 +274,9 @@ export function HomePage() {
         <div className="flex flex-wrap gap-2">
           <Link to="/review" className="btn-muted px-4 py-2 text-sm">
             오늘 복습 보기
+          </Link>
+          <Link to="/placement" className="btn-primary px-4 py-2 text-sm">
+            레벨 테스트
           </Link>
           <Link to="/chars" className="btn-muted px-4 py-2 text-sm">
             전체 목록

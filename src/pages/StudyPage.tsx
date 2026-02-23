@@ -4,6 +4,7 @@ import { MeaningReadingPanel } from '../components/MeaningReadingPanel';
 import { trackEvent } from '../services/analytics';
 import { applyStudyAction, getStudyQueue } from '../services/progress';
 import { ensureGradeProgress, seedBaseData } from '../services/seed';
+import { resolveStudyPace } from '../services/studyPlan';
 import { speakMeaningReadingRepeated, stopSpeaking } from '../services/tts';
 import { useAppStore } from '../store/useAppStore';
 import type { StudyCardItem } from '../types';
@@ -13,6 +14,7 @@ type CardMotion = 'idle' | 'good' | 'again';
 export function StudyPage() {
   const grade = useAppStore((state) => state.selectedGrade);
   const speechEnabled = useAppStore((state) => state.speechEnabled);
+  const dailyStudyTarget = useAppStore((state) => state.dailyStudyTarget);
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -30,8 +32,9 @@ export function StudyPage() {
       return;
     }
 
-    void loadQueue(grade);
-  }, [grade]);
+    const pace = resolveStudyPace(dailyStudyTarget);
+    void loadQueue(grade, pace.target, pace.newLimit);
+  }, [dailyStudyTarget, grade]);
 
   useEffect(() => {
     return () => {
@@ -71,12 +74,12 @@ export function StudyPage() {
     };
   }, [current?.charInfo.char, speechEnabled]);
 
-  async function loadQueue(targetGrade: number): Promise<void> {
+  async function loadQueue(targetGrade: number, maxItems: number, newLimit: number): Promise<void> {
     setLoading(true);
     await seedBaseData();
     await ensureGradeProgress(targetGrade);
 
-    const queue = await getStudyQueue(targetGrade, { newLimit: 20, maxItems: 50 });
+    const queue = await getStudyQueue(targetGrade, { newLimit, maxItems });
     setItems(queue);
     setLoading(false);
   }

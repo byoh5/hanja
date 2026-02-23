@@ -24,23 +24,32 @@ export interface StudyCardItem {
   progress: ProgressItem;
 }
 
-export type QuizMode = 'meaning' | 'reading' | 'character' | 'mixed';
+export type QuizMode = 'meaning' | 'reading' | 'character' | 'mixed' | 'inputCharacter' | 'inputReading' | 'weakness';
 
-export type QuestionType = Exclude<QuizMode, 'mixed'>;
+export type QuestionType = 'meaning' | 'reading' | 'character' | 'inputCharacter' | 'inputReading';
 
 export interface QuizQuestion {
   id: string;
   char: string;
   type: QuestionType;
   prompt: string;
-  options: string[];
+  options?: string[];
   correctAnswer: string;
+  acceptedAnswers?: string[];
+  explanation?: string;
 }
 
 export interface QuizAnswer {
   question: QuizQuestion;
   selectedAnswer: string;
   isCorrect: boolean;
+}
+
+export interface QuizTypeStat {
+  type: QuestionType;
+  total: number;
+  correct: number;
+  accuracy: number;
 }
 
 export interface QuizResult {
@@ -52,6 +61,7 @@ export interface QuizResult {
   durationSec: number;
   answers: QuizAnswer[];
   wrongQuestions: QuizQuestion[];
+  typeStats: QuizTypeStat[];
 }
 
 export interface SessionRecord {
