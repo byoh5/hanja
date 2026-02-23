@@ -41,9 +41,10 @@ describe('generateQuestions', () => {
       { char: '路', grade: 6, reading: '로', meaning: '길', examples: ['도로'] }
     ];
 
-    const questions = generateQuestions(withVariant, 1, 'inputReading');
-    const question = questions[0];
+    const questions = generateQuestions(withVariant, 2, 'inputReading');
+    const question = questions.find((item) => item.char === '露');
 
+    expect(question).toBeDefined();
     expect(question?.type).toBe('inputReading');
     expect(question?.acceptedAnswers).toContain('로/노');
     expect(question?.acceptedAnswers).toContain('로');
