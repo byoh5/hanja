@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { GRADE_CHARS_BY_GRADE, SUPPORTED_GRADES } from '../data';
+import { getSourceCharsByGrade, SUPPORTED_GRADES } from '../data';
 import { toISODate } from './srs';
 import type { HanjaChar, ProgressItem } from '../types';
 
@@ -30,7 +30,8 @@ export async function seedBaseData(): Promise<void> {
   }
 
   for (const grade of SUPPORTED_GRADES) {
-    await syncGradeChars(grade, GRADE_CHARS_BY_GRADE[grade]);
+    const chars = await getSourceCharsByGrade(grade);
+    await syncGradeChars(grade, chars);
   }
 
   localStorage.setItem(storageKey, 'done');

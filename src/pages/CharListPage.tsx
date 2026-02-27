@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { GRADE_CHARS_BY_GRADE, SUPPORTED_GRADES } from '../data';
+import { SUPPORTED_GRADES } from '../data';
 import type { SupportedGrade } from '../data';
 import { downloadLearningStateCsv, importLearningStateFromCsv } from '../services/learningState';
-import { getProgressByGrade } from '../services/progress';
+import { getCharsByGrade, getProgressByGrade } from '../services/progress';
 import { ensureGradeProgress, seedBaseData } from '../services/seed';
 import { useAppStore } from '../store/useAppStore';
-import type { StudyState } from '../types';
+import type { HanjaChar, StudyState } from '../types';
 
 type CellStatus = 'NEW' | 'LEARNED' | 'MASTERED';
 
@@ -60,8 +60,7 @@ export function CharListPage() {
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [statesByChar, setStatesByChar] = useState<Record<string, StudyState>>({});
-
-  const chars = GRADE_CHARS_BY_GRADE[grade];
+  const [chars, setChars] = useState<HanjaChar[]>([]);
 
   useEffect(() => {
     void load(grade);
@@ -72,7 +71,8 @@ export function CharListPage() {
     await seedBaseData();
     await ensureGradeProgress(targetGrade);
 
-    const progress = await getProgressByGrade(targetGrade);
+    const [progress, nextChars] = await Promise.all([getProgressByGrade(targetGrade), getCharsByGrade(targetGrade)]);
+    setChars(nextChars);
     setStatesByChar(Object.fromEntries(progress.map((item) => [item.char, item.state])));
 
     setLoading(false);

@@ -8,7 +8,12 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "sync:data": "node scripts/sync-shared-data.mjs",
+    "vocab:candidates": "node scripts/collect-wiktionary-candidates.mjs",
+    "vocab:build-bank": "node scripts/build-wiktionary-vocabulary-bank.mjs",
+    "flutter:analyze": "cd apps/flutter && flutter analyze",
+    "flutter:test": "cd apps/flutter && flutter test"
   },
   "keywords": [],
   "author": "",

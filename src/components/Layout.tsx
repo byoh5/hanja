@@ -407,6 +407,9 @@ export function Layout() {
             <NavLink to="/chars" className={({ isActive }) => navClass(isActive)}>
               목록
             </NavLink>
+            <NavLink to="/vocabulary" className={({ isActive }) => navClass(isActive)}>
+              어휘
+            </NavLink>
           </div>
         </nav>
 

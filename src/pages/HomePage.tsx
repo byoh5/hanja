@@ -312,6 +312,9 @@ export function HomePage() {
           <Link to="/chars" className="btn-muted px-4 py-2 text-sm">
             전체 목록
           </Link>
+          <Link to="/vocabulary" className="btn-muted px-4 py-2 text-sm">
+            어휘 사전
+          </Link>
           <Link to="/lookup" className="btn-muted px-4 py-2 text-sm">
             급수 조회
           </Link>

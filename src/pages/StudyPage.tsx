@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MeaningReadingPanel } from '../components/MeaningReadingPanel';
 import { trackEvent } from '../services/analytics';
-import { applyStudyAction, getStudyQueue } from '../services/progress';
+import { applyStudyAction, getCharsByGrade, getStudyQueue } from '../services/progress';
 import { ensureGradeProgress, seedBaseData } from '../services/seed';
 import { resolveStudyPace } from '../services/studyPlan';
 import { speakMeaningReadingRepeated, stopSpeaking } from '../services/tts';
+import { buildVocabularyLearningContent } from '../services/vocabulary';
 import { useAppStore } from '../store/useAppStore';
-import type { StudyAction, StudyCardItem } from '../types';
+import type { HanjaChar, StudyAction, StudyCardItem } from '../types';
 
 type CardMotion = 'idle' | 'good' | 'again';
 const RETRY_GAP = 1;
@@ -31,7 +32,9 @@ export function StudyPage() {
   const [animating, setAnimating] = useState(false);
   const [motion, setMotion] = useState<CardMotion>('idle');
   const [items, setItems] = useState<StudyCardItem[]>([]);
+  const [gradeChars, setGradeChars] = useState<HanjaChar[]>([]);
   const [revealed, setRevealed] = useState(!memoryBoostEnabled);
+  const [vocabularyAnswerId, setVocabularyAnswerId] = useState<string | null>(null);
 
   const actionTimerRef = useRef<number | null>(null);
   const autoSpeakTimerRef = useRef<number | null>(null);
@@ -64,6 +67,10 @@ export function StudyPage() {
   }, [current?.charInfo.char, memoryBoostEnabled]);
 
   useEffect(() => {
+    setVocabularyAnswerId(null);
+  }, [current?.charInfo.char]);
+
+  useEffect(() => {
     if (!current) {
       return;
     }
@@ -94,8 +101,12 @@ export function StudyPage() {
     await seedBaseData();
     await ensureGradeProgress(targetGrade);
 
-    const queue = await getStudyQueue(targetGrade, { newLimit, maxItems });
+    const [queue, allGradeChars] = await Promise.all([
+      getStudyQueue(targetGrade, { newLimit, maxItems }),
+      getCharsByGrade(targetGrade)
+    ]);
     setItems(queue);
+    setGradeChars(allGradeChars);
     setLoading(false);
   }
 
@@ -105,6 +116,13 @@ export function StudyPage() {
     }
     return items.length - 1;
   }, [items.length]);
+
+  const vocabularyContent = useMemo(() => {
+    if (!current) {
+      return null;
+    }
+    return buildVocabularyLearningContent(current.charInfo, gradeChars);
+  }, [current?.charInfo.char, gradeChars]);
 
   async function applyAction(action: StudyAction): Promise<void> {
     if (!grade || !current || busy) {
@@ -205,6 +223,9 @@ export function StudyPage() {
 
   const cardMotionClass =
     motion === 'good' ? 'study-card--good' : motion === 'again' ? 'study-card--again' : '';
+  const vocabularyQuiz = vocabularyContent?.quiz ?? null;
+  const vocabularyAnsweredCorrectly =
+    vocabularyAnswerId !== null && vocabularyQuiz?.correctOptionId === vocabularyAnswerId;
 
   return (
     <section className="space-y-4">
@@ -254,7 +275,113 @@ export function StudyPage() {
 
               <div className="my-6 h-px w-full max-w-sm bg-slate-200" />
 
-              <p className="text-sm text-slate-600">예시: {current.charInfo.examples[0]}</p>
+              {vocabularyContent && (
+                <section className="w-full space-y-4 text-left">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-ink">어휘 확장 학습</h2>
+                    <p className="text-xs text-slate-500">실사용 어휘 {vocabularyContent.entries.length}개</p>
+                  </div>
+
+                  {vocabularyContent.entries.length === 0 && (
+                    <p className="rounded-[14px] border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                      이 한자는 실사용 어휘 데이터가 아직 부족합니다. 자동 생성 어휘는 표시하지 않습니다.
+                    </p>
+                  )}
+
+                  {vocabularyContent.entries.length > 0 && (
+                    <ul className="space-y-2">
+                      {vocabularyContent.entries.map((entry) => {
+                        const sourceLabel = entry.source === 'curated' ? '추천' : '기본';
+
+                        return (
+                          <li
+                            key={entry.id}
+                            className="rounded-[14px] border border-slate-200 bg-white/90 px-4 py-3 shadow-[0_4px_16px_rgba(15,23,42,0.04)]"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-semibold text-ink">{entry.word}</p>
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                                {sourceLabel}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-700">{entry.meaning}</p>
+                            <p className="mt-1 text-xs text-slate-600">예문: {entry.sentence}</p>
+                            <p className="mt-1 text-[11px] text-calm-700">{entry.usageNote}</p>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+
+                  {vocabularyQuiz && (
+                    <div className="rounded-[16px] border border-calm-100 bg-calm-50 px-4 py-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-calm-700">활동 문제</p>
+                      <p className="mt-1 text-sm font-medium text-ink">{vocabularyQuiz.prompt}</p>
+
+                      <div className="mt-3 grid gap-2">
+                        {vocabularyQuiz.options.map((option) => {
+                          const isSelected = vocabularyAnswerId === option.id;
+                          const isCorrect = option.id === vocabularyQuiz.correctOptionId;
+
+                          const className =
+                            vocabularyAnswerId === null
+                              ? 'btn-muted w-full justify-between px-3 py-2 text-left'
+                              : isCorrect
+                                ? 'w-full rounded-[12px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-left'
+                                : isSelected
+                                  ? 'w-full rounded-[12px] border border-coral-300 bg-coral-100 px-3 py-2 text-left'
+                                  : 'w-full rounded-[12px] border border-slate-200 bg-white px-3 py-2 text-left opacity-70';
+
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              disabled={vocabularyAnswerId !== null}
+                              onClick={() => {
+                                setVocabularyAnswerId(option.id);
+                                trackEvent('study_vocab_quiz_answered', {
+                                  char: current.charInfo.char,
+                                  grade,
+                                  isCorrect: option.id === vocabularyQuiz.correctOptionId
+                                });
+                              }}
+                              className={className}
+                            >
+                              <span className="block text-sm font-medium text-ink">{option.word}</span>
+                              <span className="mt-1 block text-[11px] text-slate-500">{option.meaningHint}</span>
+                              <span className="mt-0.5 block text-[11px] text-slate-500">음: {option.readingHint}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {vocabularyAnswerId !== null && (
+                        <div
+                          className={`mt-3 rounded-[12px] px-3 py-3 text-xs ${vocabularyAnsweredCorrectly ? 'border border-emerald-200 bg-emerald-50 text-emerald-800' : 'border border-coral-200 bg-coral-100 text-coral-600'}`}
+                        >
+                          <p className="font-semibold">{vocabularyAnsweredCorrectly ? '정답입니다.' : '오답입니다.'}</p>
+                          <p className="mt-1">{vocabularyQuiz.explanation}</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVocabularyAnswerId(null);
+                            }}
+                            className="mt-2 text-[11px] font-semibold text-calm-700 underline underline-offset-2"
+                          >
+                            다시 풀기
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!vocabularyQuiz && vocabularyContent.entries.length > 0 && (
+                    <p className="rounded-[14px] border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                      같은 음(동음) 실사용 어휘가 부족하면 활동 문제를 만들지 않습니다.
+                    </p>
+                  )}
+                </section>
+              )}
             </>
           )}
         </div>

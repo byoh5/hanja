@@ -89,3 +89,30 @@ export interface ReviewListItem {
   dueDate: string;
   daysUntil: number;
 }
+
+export type VocabularySource = 'curated' | 'example';
+
+export interface VocabularyEntry {
+  id: string;
+  word: string;
+  meaning: string;
+  sentence: string;
+  usageNote: string;
+  containsTargetChar: boolean;
+  source: VocabularySource;
+}
+
+export interface VocabularyQuizOption {
+  id: string;
+  word: string;
+  meaningHint: string;
+  containsTargetChar: boolean;
+  readingHint: string;
+}
+
+export interface VocabularyQuiz {
+  prompt: string;
+  options: VocabularyQuizOption[];
+  correctOptionId: string;
+  explanation: string;
+}

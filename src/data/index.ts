@@ -1,24 +1,40 @@
 import type { HanjaChar } from '../types';
-import { GRADE1_CHARS } from './grade1';
-import { GRADE2_CHARS } from './grade2';
-import { GRADE3_CHARS } from './grade3';
-import { GRADE4_CHARS } from './grade4';
-import { GRADE5_CHARS } from './grade5';
-import { GRADE6_CHARS } from './grade6';
-import { GRADE7_CHARS } from './grade7';
-import { GRADE8_CHARS } from './grade8';
 
 export const SUPPORTED_GRADES = [8, 7, 6, 5, 4, 3, 2, 1] as const;
 
 export type SupportedGrade = (typeof SUPPORTED_GRADES)[number];
 
-export const GRADE_CHARS_BY_GRADE: Record<SupportedGrade, HanjaChar[]> = {
-  8: GRADE8_CHARS,
-  7: GRADE7_CHARS,
-  6: GRADE6_CHARS,
-  5: GRADE5_CHARS,
-  4: GRADE4_CHARS,
-  3: GRADE3_CHARS,
-  2: GRADE2_CHARS,
-  1: GRADE1_CHARS
-};
+let groupedByGradeCache: Record<SupportedGrade, HanjaChar[]> | null = null;
+
+function createEmptyGroups(): Record<SupportedGrade, HanjaChar[]> {
+  return SUPPORTED_GRADES.reduce<Record<SupportedGrade, HanjaChar[]>>((acc, grade) => {
+    acc[grade] = [];
+    return acc;
+  }, {} as Record<SupportedGrade, HanjaChar[]>);
+}
+
+function groupByGrade(allChars: HanjaChar[]): Record<SupportedGrade, HanjaChar[]> {
+  const grouped = createEmptyGroups();
+  for (const item of allChars) {
+    if (SUPPORTED_GRADES.includes(item.grade as SupportedGrade)) {
+      grouped[item.grade as SupportedGrade].push(item);
+    }
+  }
+  return grouped;
+}
+
+export async function getGroupedCharsByGrade(): Promise<Record<SupportedGrade, HanjaChar[]>> {
+  if (groupedByGradeCache) {
+    return groupedByGradeCache;
+  }
+
+  const module = await import('../../shared/data/hanja_chars.json');
+  groupedByGradeCache = groupByGrade(module.default as HanjaChar[]);
+
+  return groupedByGradeCache;
+}
+
+export async function getSourceCharsByGrade(grade: SupportedGrade): Promise<HanjaChar[]> {
+  const grouped = await getGroupedCharsByGrade();
+  return grouped[grade];
+}

@@ -42,6 +42,7 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: `${basePath}index.html`,
+        globIgnores: ['data/vocabulary_web_bank.json'],
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.mode === 'navigate',
