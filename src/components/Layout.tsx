@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { KakaoAdBanner } from './KakaoAdBanner';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { trackEvent } from '../services/analytics';
 import { useAppStore } from '../store/useAppStore';
@@ -412,6 +413,8 @@ export function Layout() {
             </NavLink>
           </div>
         </nav>
+
+        <KakaoAdBanner />
 
         <main className="flex-1 animate-gentle-fade">
           <Outlet />
