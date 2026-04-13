@@ -1,0 +1,15 @@
+{
+  "framework": "vite",
+  "buildCommand": "BASE_PATH=/hanja npm run sync:data && BASE_PATH=/hanja npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/hanja",
+      "destination": "/"
+    },
+    {
+      "source": "/hanja/(.*)",
+      "destination": "/$1"
+    }
+  ]
+}
